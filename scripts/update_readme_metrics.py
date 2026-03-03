@@ -21,8 +21,10 @@ CHART_START_MARKER = "<!-- CHART_IMAGE_START -->"
 CHART_END_MARKER = "<!-- CHART_IMAGE_END -->"
 
 DEFAULT_KEYWORDS = (
-    "LLM cost optimization, token efficiency, prompt compression, inference cost reduction, "
-    "LLM 成本优化, Token 节省, 推理成本控制"
+    "天将, TianJiang, Token Governor, LLM 成本优化, Token 节省, 推理成本, 智能体, "
+    "上下文压缩, 语义缓存, 工具 Top-K, 预算守卫, 自动策略, 模型画像, 推理路由, "
+    "LLM cost optimization, token savings, inference cost, AI agents, context compression, "
+    "semantic cache, tool top-k, budget guard, auto strategy, model profiling, model routing"
 )
 
 
@@ -158,15 +160,16 @@ def build_metrics_block(
     baseline_total = baseline_avg * baseline_count
     optimized_total = optimized_avg * optimized_count
 
+    baseline_success_pct = baseline.get("success_rate", 0.0) * 100.0
+    optimized_success_pct = optimized.get("success_rate", 0.0) * 100.0
+    baseline_latency = baseline.get("mean_latency", 0.0)
+    optimized_latency = optimized.get("mean_latency", 0.0)
+
     total_token_delta_pct = pct_change(optimized_total, baseline_total)
-    avg_token_delta_pct = pct_change(optimized_avg, baseline_avg)
-    latency_delta_pct = pct_change(
-        optimized.get("mean_latency", 0.0),
-        baseline.get("mean_latency", 0.0),
-    )
     success_delta_pp = (
         optimized.get("success_rate", 0.0) - baseline.get("success_rate", 0.0)
     ) * 100.0
+    latency_delta_pct = pct_change(optimized_latency, baseline_latency)
     savings_pct = token_savings_pct(baseline_total, optimized_total)
 
     generated_at = summary.get("generated_at_utc", "N/A")
@@ -174,50 +177,41 @@ def build_metrics_block(
     mode_label = selected_mode
 
     lines: list[str] = []
-    lines.append("### 🔥 Token Savings Summary")
+    lines.append("### 📊 实测结果 / Real Benchmark Results")
     lines.append("")
-    lines.append(f"| Metric | Baseline | {mode_label} | Improvement |")
-    lines.append("| --- | ---: | ---: | ---: |")
+    if savings_pct >= 0:
+        lines.append(f"- **Token 节省 / Token Savings**：**{savings_pct:.2f}%**")
+    else:
+        lines.append(
+            f"- **Token 变化 / Token Change**：**+{abs(savings_pct):.2f}%**（Token Increase）"
+        )
     lines.append(
-        f"| Total Tokens | {format_tokens(baseline_total)} | {format_tokens(optimized_total)} | **{total_token_delta_pct:+.2f}%** |"
+        f"- **成功率 / Success Rate**：Baseline **{baseline_success_pct:.2f}%** → TianJiang ({mode_label}) **{optimized_success_pct:.2f}%**"
     )
     lines.append(
-        f"| Avg Tokens / Task | {format_tokens(baseline_avg)} | {format_tokens(optimized_avg)} | {avg_token_delta_pct:+.2f}% |"
+        f"- **延迟 / Latency**：Baseline **{baseline_latency:.2f}s** → TianJiang ({mode_label}) **{optimized_latency:.2f}s** ({latency_delta_pct:+.2f}%)"
     )
     lines.append(
-        f"| Success Rate | {baseline.get('success_rate', 0.0) * 100:.2f}% | {optimized.get('success_rate', 0.0) * 100:.2f}% | {success_delta_pp:+.2f}pp |"
+        f"- **总 Token / Total Tokens**：Baseline **{format_tokens(baseline_total)}** → TianJiang ({mode_label}) **{format_tokens(optimized_total)}** ({total_token_delta_pct:+.2f}%)"
     )
     lines.append(
-        f"| Mean Latency | {baseline.get('mean_latency', 0.0):.2f}s | {optimized.get('mean_latency', 0.0):.2f}s | {latency_delta_pct:+.2f}% |"
+        "- **统计口径 / Method**：Total Tokens = count × mean_token（input+output）"
     )
 
-    if usd_per_1k_tokens is not None and usd_per_1k_tokens >= 0:
+    if usd_per_1k_tokens is not None and usd_per_1k_tokens >= 0 and baseline_total > 0:
         baseline_cost = baseline_total / 1000.0 * usd_per_1k_tokens
         optimized_cost = optimized_total / 1000.0 * usd_per_1k_tokens
         cost_delta_pct = pct_change(optimized_cost, baseline_cost)
         lines.append(
-            f"| Cost (USD est.) | {format_usd(baseline_cost)} | {format_usd(optimized_cost)} | {cost_delta_pct:+.2f}% |"
+            f"- **成本估算 / Cost (USD est.)**：Baseline **{format_usd(baseline_cost)}** → TianJiang ({mode_label}) **{format_usd(optimized_cost)}** ({cost_delta_pct:+.2f}%)"
         )
 
     lines.append("")
-    if savings_pct > 0:
-        lines.append(
-            f"> 🎯 `{mode_label}` reduces token usage by **{savings_pct:.2f}%** vs baseline."
-        )
-    elif savings_pct < 0:
-        lines.append(
-            f"> ⚠️ `{mode_label}` uses **{abs(savings_pct):.2f}% more tokens** than baseline in this run."
-        )
-    else:
-        lines.append(
-            f"> `{mode_label}` token usage is unchanged vs baseline in this run."
-        )
-    lines.append("")
     lines.append(
-        f"> Data source: `{comparison_display}` | Generated (UTC): `{generated_at}`"
+        f"> 数据源 / Data source: `{comparison_display}` | Generated (UTC): `{generated_at}` | ΔSuccess: {success_delta_pp:+.2f}pp"
     )
     lines.append("")
-    lines.append(f"Keywords: {keywords}")
+    lines.append(f"**关键词 / Keywords**：{keywords}")
     return "\n".join(lines).strip()
 
 
@@ -440,7 +434,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--chart-alt",
         type=str,
-        default="LLM inference cost and token savings comparison / LLM 推理成本与 Token 节省对比图",
+        default="天将 TianJiang - 推理成本与 Token 节省对比图 | LLM inference cost and token savings comparison",
         help="Alt text for inserted chart image.",
     )
     parser.add_argument(
