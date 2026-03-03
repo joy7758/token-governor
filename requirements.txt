@@ -1,0 +1,11 @@
+langchain
+langchain-openai
+langchain-google-genai
+langchain-community
+openai
+python-dotenv
+duckduckgo-search
+ddgs
+matplotlib
+pandas
+plotly

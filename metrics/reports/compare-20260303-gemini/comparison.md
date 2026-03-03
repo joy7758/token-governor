@@ -1,0 +1,28 @@
+# Baseline vs Governor Report
+
+## Summary Statistics
+
+```json
+{
+  "baseline_file": "metrics/data/baseline.jsonl",
+  "governor_file": "metrics/data/governor.jsonl",
+  "baseline": {
+    "count": 20.0,
+    "mean_token": 1704.3,
+    "p50_token": 919.0,
+    "p95_token": 3914.3000000000043,
+    "success_rate": 1.0,
+    "mean_latency": 9.684616362450015,
+    "fallback_trigger_rate": 0.0
+  },
+  "governor": {
+    "count": 20.0,
+    "mean_token": 1604.9,
+    "p50_token": 984.0,
+    "p95_token": 4868.050000000001,
+    "success_rate": 1.0,
+    "mean_latency": 10.036821281299945,
+    "fallback_trigger_rate": 0.0
+  }
+}
+```
