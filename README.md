@@ -2,12 +2,16 @@
 
 `TianJiang` 是一个面向 LLM Agent 的运行时控制层，用于控制 token 预算、限制 fallback 重试、记录运行审计，并支持自动策略推荐与多模式优化。
 
-## 为什么使用
+## 核心特性 / Features
 
-- 控制成本：限制 token 预算，减少无效消耗
-- 保持稳定：限制 fallback 链路，避免失控重试
-- 可量化对比：自动输出 baseline vs governor 报告（JSON/Markdown/PNG/HTML）
-- 可扩展优化：支持缓存、上下文压缩、工具选择、模型路由等策略开关
+| 特性 | 说明 |
+| --- | --- |
+| Token 预算治理 | 限制总 token 消耗，防止成本失控 |
+| Fallback 守卫 | 限制失败重试次数，提升运行稳定性 |
+| 自动策略推荐 | 基于任务特征自动选择优化组合 |
+| 驾驶模式 | `auto / eco / comfort / sport / rocket` 多档位可切换 |
+| 可复现实验报告 | 自动生成 JSON/Markdown/PNG/HTML 对比结果 |
+| 模型画像支持 | 用历史数据驱动 auto 模式推荐偏置 |
 
 ## 快速开始
 
@@ -28,7 +32,7 @@ export OPENAI_API_KEY="your_openai_key"
 export GOOGLE_API_KEY="your_google_key"
 ```
 
-## 基础运行
+## 快速体验 / Quick Run
 
 ### Baseline
 
@@ -56,6 +60,12 @@ python -m metrics.report \
   --outdir metrics/reports/compare-real \
   --interactive
 ```
+
+运行完成后可直接查看：
+
+- `metrics/reports/compare-real/comparison_summary.png`
+- `metrics/reports/compare-real/comparison.md`
+- `metrics/reports/compare-real/comparison.json`
 
 ## 自动更新的对比结果
 
@@ -93,6 +103,20 @@ bash scripts/run-all-and-update.sh
 python main.py --mode governor --drive-mode eco --limit 10
 python main.py --mode governor --drive-mode rocket --enable-agentic-plan-cache --limit 10
 ```
+
+## CLI 参数速览
+
+| 参数 | 说明 | 示例 |
+| --- | --- | --- |
+| `--mode` | 运行模式 | `baseline` / `governor` |
+| `--drive-mode` | 驾驶模式 | `auto` / `eco` / `comfort` / `sport` / `rocket` |
+| `--auto-strategy` | 启用自动策略推荐 | `--auto-strategy` |
+| `--max-tokens` | Token 预算上限 | `--max-tokens 12000` |
+| `--max-fallback` | 最大 fallback 次数 | `--max-fallback 2` |
+| `--tool-top-k` | 工具选择 Top-K | `--tool-top-k 3` |
+| `--history-summary-chars` | 历史压缩长度 | `--history-summary-chars 1200` |
+| `--out-file` | 结果输出文件 | `--out-file metrics/data/run.jsonl` |
+| `--model-profile` | 模型画像文件 | `--model-profile metrics/profiles/model_profiles.json` |
 
 ## 一键全流程（推荐）
 
@@ -145,6 +169,12 @@ python main.py \
 - [模型画像 Schema](docs/model-profile-schema.md)
 - [变更记录](CHANGELOG.md)
 - [贡献指南](CONTRIBUTING.md)
+
+## 典型场景 / Use Cases
+
+- 成本敏感的批量任务：优先 `eco` / `auto`
+- 长上下文或复杂流程：使用 `comfort` / `sport`
+- 高精度分析任务：使用 `rocket`（高成本档）
 
 ## FAQ
 
