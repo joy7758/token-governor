@@ -1,0 +1,131 @@
+name: Benchmark And Update README Metrics
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_benchmark:
+        description: "Run full benchmark before updating README"
+        type: boolean
+        required: true
+        default: true
+      limit:
+        description: "Task limit per mode (when run_benchmark=true)"
+        type: string
+        required: false
+        default: "20"
+      model:
+        description: "Model selector (e.g. auto, openai:gpt-4o-mini)"
+        type: string
+        required: false
+        default: "auto"
+      outdir:
+        description: "Report output directory (when run_benchmark=true)"
+        type: string
+        required: false
+        default: "metrics/reports/compare-real"
+      comparison_path:
+        description: "Optional comparison.json path (empty means auto latest)"
+        type: string
+        required: false
+        default: ""
+      mode:
+        description: "Optional optimized mode for README table (empty means auto)"
+        type: string
+        required: false
+        default: ""
+      branch:
+        description: "Branch name used in raw image URLs"
+        type: string
+        required: false
+        default: "main"
+      usd_per_1k_tokens:
+        description: "Optional USD price per 1K tokens"
+        type: string
+        required: false
+        default: ""
+  schedule:
+    # Monthly on the 1st day at 00:00 UTC.
+    - cron: "0 0 1 * *"
+
+permissions:
+  contents: write
+
+jobs:
+  benchmark-and-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run full benchmark
+        if: ${{ github.event_name == 'schedule' || inputs.run_benchmark }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          LIMIT: ${{ inputs.limit || '20' }}
+          MODEL: ${{ inputs.model || 'auto' }}
+          OUTDIR: ${{ inputs.outdir || 'metrics/reports/compare-real' }}
+        run: |
+          if [[ -z "${OPENAI_API_KEY}" && -z "${GOOGLE_API_KEY}" ]]; then
+            echo "Missing API key secret: set OPENAI_API_KEY or GOOGLE_API_KEY."
+            exit 1
+          fi
+          bash scripts/run-all-and-update.sh
+
+      - name: Update README metrics
+        env:
+          DISPATCH_RUN_BENCHMARK: ${{ inputs.run_benchmark && 'true' || 'false' }}
+          OUTDIR: ${{ inputs.outdir || 'metrics/reports/compare-real' }}
+          COMPARISON_PATH: ${{ inputs.comparison_path || '' }}
+          MODE_NAME: ${{ inputs.mode || '' }}
+          BRANCH_NAME: ${{ inputs.branch || 'main' }}
+          USD_PER_1K: ${{ inputs.usd_per_1k_tokens || '' }}
+        run: |
+          RUN_BENCHMARK="${DISPATCH_RUN_BENCHMARK}"
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            RUN_BENCHMARK="true"
+          fi
+
+          ARGS=(--readme README.md --branch "${BRANCH_NAME}")
+
+          if [[ "${RUN_BENCHMARK}" == "true" ]]; then
+            ARGS+=(--comparison "${OUTDIR}/comparison.json")
+          elif [[ -n "${COMPARISON_PATH}" ]]; then
+            ARGS+=(--comparison "${COMPARISON_PATH}")
+          fi
+
+          if [[ -n "${MODE_NAME}" ]]; then
+            ARGS+=(--mode "${MODE_NAME}")
+          fi
+
+          if [[ -n "${USD_PER_1K}" ]]; then
+            ARGS+=(--usd-per-1k-tokens "${USD_PER_1K}")
+          fi
+
+          python scripts/update_readme_metrics.py "${ARGS[@]}"
+
+      - name: Commit and push changes
+        run: |
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A README.md metrics/reports metrics/profiles
+          git commit -m "ci: update README metrics and benchmark reports"
+          git push

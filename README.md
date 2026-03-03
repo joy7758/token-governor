@@ -56,6 +56,12 @@ python -m metrics.report \
   --interactive
 ```
 
+### 🤖 CI Auto Update / GitHub Actions 自动更新
+1. 在仓库 `Settings -> Secrets and variables -> Actions` 配置至少一个密钥：
+`OPENAI_API_KEY` 或 `GOOGLE_API_KEY`
+2. 打开 `Actions`，运行工作流 `Benchmark And Update README Metrics`
+3. 默认会执行完整 benchmark，然后自动更新 README 图表与指标并提交
+
 ---
 
 ## ✨ 三、核心功能 / Features
@@ -93,12 +99,24 @@ python main.py --mode governor --drive-mode rocket --enable-agentic-plan-cache -
 ## 📊 五、对比图与实时指标 / Metrics & Visuals
 
 <!-- CHART_IMAGE_START -->
-![LLM inference cost and token savings comparison / LLM 推理成本与 Token 节省对比图](metrics/reports/compare-real/comparison_summary.png)
+![LLM inference cost and token savings comparison / LLM 推理成本与 Token 节省对比图](https://raw.githubusercontent.com/joy7758/token-governor/main/metrics/reports/compare-real-check/comparison_summary.png)
 <!-- CHART_IMAGE_END -->
 
 <!-- REAL_METRICS_START -->
-Baseline vs Optimized Results / Baseline 与优化策略对比  
-(自动生成，可通过 `scripts/update_readme_metrics.py` 重新填充)
+### 🔥 Token Savings Summary
+
+| Metric | Baseline | rocket | Improvement |
+| --- | ---: | ---: | ---: |
+| Total Tokens | 935 | 1,661 | **+77.65%** |
+| Avg Tokens / Task | 935 | 1,661 | +77.65% |
+| Success Rate | 100.00% | 100.00% | +0.00pp |
+| Mean Latency | 6.63s | 10.26s | +54.62% |
+
+> ⚠️ `rocket` uses **77.65% more tokens** than baseline in this run.
+
+> Data source: `metrics/reports/compare-real-check/comparison.json` | Generated (UTC): `2026-03-03T13:55:47.575675+00:00`
+
+Keywords: LLM cost optimization, token efficiency, prompt compression, inference cost reduction, LLM 成本优化, Token 节省, 推理成本控制
 <!-- REAL_METRICS_END -->
 
 ---
