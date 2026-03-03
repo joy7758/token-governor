@@ -87,20 +87,50 @@ def record_result(
         "output_tokens": int(result.get("output_tokens", 0) or 0),
         "total_tokens": int(result.get("total_tokens", 0) or 0),
         "latency": float(latency),
+        "latency_ms": int((float(latency) if latency is not None else 0.0) * 1000),
         "success": bool(result.get("success", False)),
         "mode": mode,
         "error": result.get("error"),
         "logged_at_utc": datetime.now(timezone.utc).isoformat(),
     }
 
+    decision_bundle = result.get("decision_bundle")
+    if isinstance(decision_bundle, dict):
+        row["decision_bundle"] = decision_bundle
+        row["session_id"] = decision_bundle.get("session_id")
+        fallback = decision_bundle.get("fallback", {})
+        if isinstance(fallback, dict):
+            row["fallback_steps"] = int(fallback.get("steps_taken", 0) or 0)
+        outcome = decision_bundle.get("outcome", {})
+        if isinstance(outcome, dict):
+            validators = outcome.get("validator_results", {})
+            row["validator_results"] = validators
+            if isinstance(validators, dict):
+                policy_violation = validators.get("policy_violation")
+                if policy_violation is not None:
+                    row["policy_violation"] = bool(policy_violation)
+                validator_pass = validators.get("pass")
+                if validator_pass is not None:
+                    row["validator_pass"] = bool(validator_pass)
+        context_build = decision_bundle.get("context_build", {})
+        if isinstance(context_build, dict):
+            ratios = context_build.get("compression_ratios", {})
+            if isinstance(ratios, dict) and ratios:
+                row["compression_ratio"] = ratios
+
     if "governor_total_tokens" in result:
         row["governor_total_tokens"] = result["governor_total_tokens"]
     if "fallback_count" in result:
         row["fallback_count"] = result["fallback_count"]
+    if "fallback_steps" in result:
+        row["fallback_steps"] = int(result["fallback_steps"] or 0)
     if "strategy" in result:
         row["strategy"] = result["strategy"]
     if "selected_tools" in result:
         row["selected_tools"] = result["selected_tools"]
+        row["tool_list"] = result["selected_tools"]
+    if "selected_tool_types" in result:
+        row["selected_tool_types"] = result["selected_tool_types"]
     if "model" in result:
         row["model"] = result["model"]
     if "strategies_applied" in result:
@@ -123,6 +153,26 @@ def record_result(
         )
     if "strategy_note" in result:
         row["strategy_note"] = result["strategy_note"]
+    if "failure_family" in result:
+        row["failure_family"] = result["failure_family"]
+    if "failure_type" in result:
+        row["failure_type"] = result["failure_type"]
+    if "policy_violation" in result:
+        row["policy_violation"] = bool(result["policy_violation"])
+    if "category" in result:
+        row["category"] = result["category"]
+    if "benchmark_description" in result:
+        row["benchmark_description"] = result["benchmark_description"]
+    if "allowed_tools" in result:
+        row["allowed_tools"] = result["allowed_tools"]
+    if "forbidden_tools" in result:
+        row["forbidden_tools"] = result["forbidden_tools"]
+    if "expected_output" in result:
+        row["expected_output"] = result["expected_output"]
+    if "validator" in result:
+        row["validator"] = result["validator"]
+    if "is_adversarial" in result:
+        row["is_adversarial"] = bool(result["is_adversarial"])
     if "auto_strategy_reasons" in result:
         row["auto_strategy_reasons"] = result["auto_strategy_reasons"]
     if "auto_task_features" in result:

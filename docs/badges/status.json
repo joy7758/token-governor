@@ -1,0 +1,7 @@
+{
+  "mode": "governor",
+  "success_rate_pct": 0.0,
+  "token_savings_pct": 0.0,
+  "mean_latency_ms": 0.0,
+  "fallback_rate_pct": 0.0
+}

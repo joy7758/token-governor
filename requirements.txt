@@ -9,3 +9,5 @@ ddgs
 matplotlib
 pandas
 plotly
+pyyaml
+kaleido

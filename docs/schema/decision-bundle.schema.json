@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yourdomain.com/schema/decision-bundle.json",
+  "title": "Decision Bundle Schema",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "Unique ID for this decision run"
+    },
+    "user_query": {
+      "type": "string"
+    },
+    "gate": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "number"
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "tool_selection": {
+      "type": "object",
+      "properties": {
+        "top_k_candidates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dependency_closure": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scores": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "context_build": {
+      "type": "object",
+      "properties": {
+        "slots": {
+          "type": "object"
+        },
+        "compression_ratios": {
+          "type": "object"
+        }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "properties": {
+        "selected_model": {
+          "type": "string"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "properties": {
+        "steps_taken": {
+          "type": "number"
+        },
+        "trigger_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean"
+        },
+        "validator_results": {
+          "type": "object"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "tokens_used": {
+          "type": "number"
+        },
+        "latency_ms": {
+          "type": "number"
+        },
+        "fallback_triggered": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "required": [
+    "session_id",
+    "user_query",
+    "gate",
+    "tool_selection",
+    "outcome"
+  ]
+}

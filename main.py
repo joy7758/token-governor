@@ -41,6 +41,82 @@ DEFAULT_TASKS = [
 ]
 
 
+def load_tasks(
+    tasks_file: str | None = None,
+    limit: int | None = None,
+) -> list[dict[str, object]]:
+    if not tasks_file:
+        prompts = DEFAULT_TASKS if limit is None else DEFAULT_TASKS[:limit]
+        return [
+            {
+                "id": f"task-{idx:03d}",
+                "category": "default",
+                "description": "Default benchmark prompt",
+                "input": prompt,
+                "allowed_tools": [],
+                "forbidden_tools": [],
+                "expected_output": "",
+                "validator": {"type": "manual"},
+                "is_adversarial": False,
+            }
+            for idx, prompt in enumerate(prompts, start=1)
+        ]
+
+    path = Path(tasks_file)
+    if not path.exists():
+        raise FileNotFoundError(f"Tasks file not found: {path}")
+
+    raw_tasks: list[object]
+    if path.suffix.lower() == ".jsonl":
+        raw_tasks = []
+        with path.open("r", encoding="utf-8") as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+                raw_tasks.append(json.loads(line))
+    else:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            raw_tasks = list(payload.get("tasks", []))
+        elif isinstance(payload, list):
+            raw_tasks = payload
+        else:
+            raise ValueError(f"Unsupported tasks format in {path}")
+
+    normalized: list[dict[str, object]] = []
+    for idx, item in enumerate(raw_tasks, start=1):
+        if isinstance(item, str):
+            row: dict[str, object] = {"input": item}
+        elif isinstance(item, dict):
+            row = dict(item)
+        else:
+            continue
+
+        prompt = str(row.get("input", row.get("prompt", "")) or "").strip()
+        if not prompt:
+            continue
+
+        task_id = str(row.get("id", f"task-{idx:03d}"))
+        normalized.append(
+            {
+                "id": task_id,
+                "category": str(row.get("category", "custom")),
+                "description": str(row.get("description", "")),
+                "input": prompt,
+                "allowed_tools": row.get("allowed_tools", []),
+                "forbidden_tools": row.get("forbidden_tools", []),
+                "expected_output": str(row.get("expected_output", "")),
+                "validator": row.get("validator", {"type": "manual"}),
+                "is_adversarial": bool(row.get("is_adversarial", False)),
+            }
+        )
+
+    if limit is not None:
+        return normalized[:limit]
+    return normalized
+
+
 def _print_summary(title: str, summary: dict[str, float], paths: dict[str, str]) -> None:
     print(f"\n=== {title} Summary ===")
     print(f"tasks: {summary['num_tasks']}")
@@ -226,10 +302,11 @@ def run_baseline(
     model_name: str,
     limit: int | None = None,
     out_file: str | None = None,
+    tasks_file: str | None = None,
 ) -> int:
     load_dotenv()
 
-    tasks = DEFAULT_TASKS if limit is None else DEFAULT_TASKS[:limit]
+    tasks = load_tasks(tasks_file=tasks_file, limit=limit)
     tracker = MetricsTracker(output_dir="metrics/data")
 
     try:
@@ -238,10 +315,22 @@ def run_baseline(
         print(f"[error] failed to initialize BaselineAgent: {exc}")
         return 1
 
-    for idx, prompt in enumerate(tasks, start=1):
-        task_id = f"task-{idx:03d}"
+    for task in tasks:
+        task_id = str(task.get("id", "task-unknown"))
+        prompt = str(task.get("input", "") or "")
         print(f"[run] {task_id}: {prompt}")
         result = agent.run_task(prompt=prompt, task_id=task_id)
+        result.update(
+            {
+                "category": task.get("category"),
+                "benchmark_description": task.get("description"),
+                "allowed_tools": task.get("allowed_tools"),
+                "forbidden_tools": task.get("forbidden_tools"),
+                "expected_output": task.get("expected_output"),
+                "validator": task.get("validator"),
+                "is_adversarial": task.get("is_adversarial"),
+            }
+        )
         tracker.add_record(result)
         print(
             "[done] "
@@ -270,10 +359,12 @@ def run_governor(
     auto_strategy: bool = False,
     drive_mode: str | None = None,
     model_profiles: dict[str, object] | None = None,
+    policy_file: str | None = None,
+    tasks_file: str | None = None,
 ) -> int:
     load_dotenv()
 
-    tasks = DEFAULT_TASKS if limit is None else DEFAULT_TASKS[:limit]
+    tasks = load_tasks(tasks_file=tasks_file, limit=limit)
     tracker = MetricsTracker(output_dir="metrics/data")
     effective_strategy = strategy_config or resolve_strategy("balanced")
     overrides = strategy_overrides or {}
@@ -286,6 +377,7 @@ def run_governor(
             max_tokens=max_tokens,
             max_fallback=max_fallback,
             opt_strategy="balanced",
+            policy_path=policy_file,
         )
         guarded_agent.apply_strategy(effective_strategy)
     except Exception as exc:  # noqa: BLE001
@@ -294,15 +386,25 @@ def run_governor(
 
     last_strategy_snapshot = ""
 
-    for idx, prompt in enumerate(tasks, start=1):
-        task_id = f"task-{idx:03d}"
+    for task in tasks:
+        task_id = str(task.get("id", "task-unknown"))
+        prompt = str(task.get("input", "") or "")
         task_context = build_task_context(
             prompt=prompt,
             records=tracker.records,
             tool_count=len(getattr(baseline_agent, "tools", [])),
         )
 
-        run_metadata: dict[str, object] = {"task_features": task_context}
+        run_metadata: dict[str, object] = {
+            "task_features": task_context,
+            "category": task.get("category"),
+            "benchmark_description": task.get("description"),
+            "allowed_tools": task.get("allowed_tools"),
+            "forbidden_tools": task.get("forbidden_tools"),
+            "expected_output": task.get("expected_output"),
+            "validator": task.get("validator"),
+            "is_adversarial": task.get("is_adversarial"),
+        }
         if auto_strategy:
             profile_hint_reason: str | None = None
             profile_hint_mode: str | None = None
@@ -374,6 +476,8 @@ def run_governor(
                 run_metadata=run_metadata,
             )
         except (BudgetExceeded, FallbackExceeded) as exc:
+            error_text = str(exc)
+            failure_type = "budget_exceeded" if isinstance(exc, BudgetExceeded) else "fallback_exceeded"
             result = {
                 "task_id": task_id,
                 "mode": "governor",
@@ -384,7 +488,11 @@ def run_governor(
                 "total_tokens": 0,
                 "latency": 0.0,
                 "success": False,
-                "error": str(exc),
+                "error": error_text,
+                "failure_family": "deterministic" if isinstance(exc, BudgetExceeded) else "probabilistic",
+                "failure_type": failure_type,
+                "fallback_steps": max_fallback,
+                "policy_violation": False,
             }
 
         tracker.add_record(result)
@@ -447,6 +555,21 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Optional model profile JSON path generated by "
             "scripts/build_model_profiles.py"
+        ),
+    )
+    parser.add_argument(
+        "--policy-file",
+        type=str,
+        default="policy.yaml",
+        help="Governor-only: path to policy YAML (default: policy.yaml).",
+    )
+    parser.add_argument(
+        "--tasks-file",
+        type=str,
+        default=None,
+        help=(
+            "Optional benchmark task file path (.json/.jsonl). "
+            "If omitted, built-in DEFAULT_TASKS are used."
         ),
     )
     parser.add_argument(
@@ -602,6 +725,8 @@ if __name__ == "__main__":
                 auto_strategy=auto_mode_enabled,
                 drive_mode=args.drive_mode,
                 model_profiles=model_profiles,
+                policy_file=args.policy_file,
+                tasks_file=args.tasks_file,
             )
         )
     raise SystemExit(
@@ -609,5 +734,6 @@ if __name__ == "__main__":
             model_name=args.model,
             limit=args.limit,
             out_file=args.out_file,
+            tasks_file=args.tasks_file,
         )
     )

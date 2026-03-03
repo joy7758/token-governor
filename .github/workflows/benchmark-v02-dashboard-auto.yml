@@ -1,0 +1,113 @@
+name: Benchmark v0.2 Dashboard Auto
+
+on:
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - "metrics/reports/**"
+      - "metrics/data/**"
+      - "README.md"
+      - "docs/trends/**"
+      - "docs/badges/**"
+      - "metrics/reports/all_runs_history.jsonl"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Task limit for benchmark run"
+        type: string
+        required: false
+        default: "60"
+      model:
+        description: "Model selector (e.g. auto, openai:gpt-4o-mini)"
+        type: string
+        required: false
+        default: "auto"
+      tasks_file:
+        description: "Benchmark task file (.json/.jsonl)"
+        type: string
+        required: false
+        default: "metrics/benchmarks/benchmark_v02_60_tasks.json"
+      policy_file:
+        description: "Policy YAML path"
+        type: string
+        required: false
+        default: "policy.yaml"
+      outdir:
+        description: "Dashboard/report output directory"
+        type: string
+        required: false
+        default: "metrics/reports/v02-dashboard"
+      mode:
+        description: "Mode used for README comparison row"
+        type: string
+        required: false
+        default: "governor"
+      branch:
+        description: "Branch for README raw image links"
+        type: string
+        required: false
+        default: "main"
+
+permissions:
+  contents: write
+
+jobs:
+  benchmark-v02:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run benchmark + validator + dashboard + report + README update
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          LIMIT: ${{ inputs.limit || '60' }}
+          MODEL: ${{ inputs.model || 'auto' }}
+          TASKS_FILE: ${{ inputs.tasks_file || 'metrics/benchmarks/benchmark_v02_60_tasks.json' }}
+          POLICY_FILE: ${{ inputs.policy_file || 'policy.yaml' }}
+          OUTDIR: ${{ inputs.outdir || 'metrics/reports/v02-dashboard' }}
+          MODE: ${{ inputs.mode || 'governor' }}
+          BRANCH: ${{ inputs.branch || 'main' }}
+          UPDATE_README: "true"
+          CHART_PATH: ${{ (inputs.outdir || 'metrics/reports/v02-dashboard') }}/summary_panel.png
+          RUN_LABEL: full
+          HISTORY_FILE: metrics/reports/all_runs_history.jsonl
+          TRENDS_OUT_DIR: docs/trends
+          BADGES_OUT_DIR: docs/badges
+          KPI_OUT_DIR: docs/trends
+          ENABLE_HISTORY: "true"
+          ENABLE_TRENDS: "true"
+          ENABLE_BADGES: "true"
+          ENABLE_KPI: "true"
+        run: |
+          bash scripts/run-benchmark-v02-dashboard.sh
+
+      - name: Commit and push generated artifacts
+        env:
+          OUTDIR: ${{ inputs.outdir || 'metrics/reports/v02-dashboard' }}
+        run: |
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A README.md "${OUTDIR}" docs/trends docs/badges metrics/reports/all_runs_history.jsonl
+          git commit -m "ci: update v0.2 benchmark observability artifacts"
+          git push

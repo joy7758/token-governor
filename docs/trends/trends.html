@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Token Governor Trends</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f8f4;
+      --card: #ffffff;
+      --ink: #1f2a1f;
+      --muted: #617061;
+      --line: #dde4da;
+      --accent: #2c7a4b;
+    }
+    body {
+      margin: 0;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at 10% 10%, #eef7ef 0%, var(--bg) 50%);
+    }
+    main {
+      max-width: 1100px;
+      margin: 32px auto;
+      padding: 0 16px 48px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      letter-spacing: 0.3px;
+    }
+    p {
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(16, 40, 20, 0.05);
+      padding: 12px;
+    }
+    .chart {
+      height: 320px;
+      width: 100%;
+    }
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Token Governor Benchmark Trends</h1>
+    <p>Daily light benchmark trend board: success, token savings, fallback, latency.</p>
+    <div class="grid">
+      <div class="card"><div id="successTrend" class="chart"></div></div>
+      <div class="card"><div id="tokenTrend" class="chart"></div></div>
+      <div class="card"><div id="fallbackTrend" class="chart"></div></div>
+      <div class="card"><div id="latencyTrend" class="chart"></div></div>
+    </div>
+  </main>
+
+  <script>
+    function renderLineChart(elId, title, yName, url, color) {
+      fetch(url)
+        .then(resp => resp.json())
+        .then(data => {
+          const chart = echarts.init(document.getElementById(elId));
+          chart.setOption({
+            title: { text: title, textStyle: { fontSize: 14, fontWeight: 600 } },
+            tooltip: { trigger: 'axis' },
+            grid: { top: 42, left: 48, right: 20, bottom: 36 },
+            xAxis: { type: 'category', data: data.dates || [] },
+            yAxis: { type: 'value', name: yName },
+            series: [{
+              data: data.values || [],
+              type: 'line',
+              smooth: true,
+              lineStyle: { width: 3, color: color },
+              itemStyle: { color: color },
+              areaStyle: { opacity: 0.12, color: color }
+            }]
+          });
+          window.addEventListener('resize', () => chart.resize());
+        })
+        .catch(err => {
+          const el = document.getElementById(elId);
+          el.innerHTML = '<div style="padding:16px;color:#a33">Failed to load trend data.</div>';
+          console.error(url, err);
+        });
+    }
+
+    renderLineChart('successTrend', 'Success Rate Trend', 'rate', 'success_trend.json', '#2c7a4b');
+    renderLineChart('tokenTrend', 'Token Savings Trend', '%', 'token_trend.json', '#1f78b4');
+    renderLineChart('fallbackTrend', 'Fallback Rate Trend', 'rate', 'fallback_trend.json', '#dd6b20');
+    renderLineChart('latencyTrend', 'Latency Trend', 'seconds', 'latency_trend.json', '#5a67d8');
+  </script>
+</body>
+</html>

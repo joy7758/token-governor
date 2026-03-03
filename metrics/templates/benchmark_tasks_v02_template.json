@@ -1,0 +1,96 @@
+{
+  "version": "0.2",
+  "total_tasks": 60,
+  "categories": [
+    {
+      "name": "single_turn_no_tool",
+      "description": "回答/总结/问答，考察 Gate & Router",
+      "tasks": [
+        "single_turn_no_tool_01",
+        "single_turn_no_tool_02",
+        "single_turn_no_tool_03",
+        "single_turn_no_tool_04",
+        "single_turn_no_tool_05",
+        "single_turn_no_tool_06",
+        "single_turn_no_tool_07",
+        "single_turn_no_tool_08",
+        "single_turn_no_tool_09",
+        "single_turn_no_tool_10",
+        "single_turn_no_tool_11",
+        "single_turn_no_tool_12"
+      ]
+    },
+    {
+      "name": "single_tool_sensitive",
+      "description": "单个工具调用，考察 Schema/Params/Dependency",
+      "tasks": [
+        "single_tool_sensitive_01",
+        "single_tool_sensitive_02",
+        "single_tool_sensitive_03",
+        "single_tool_sensitive_04",
+        "single_tool_sensitive_05",
+        "single_tool_sensitive_06",
+        "single_tool_sensitive_07",
+        "single_tool_sensitive_08",
+        "single_tool_sensitive_09",
+        "single_tool_sensitive_10",
+        "single_tool_sensitive_11",
+        "single_tool_sensitive_12"
+      ]
+    },
+    {
+      "name": "multi_tool_chain",
+      "description": "search -> extract -> aggregate，考察依赖闭包",
+      "tasks": [
+        "multi_tool_chain_01",
+        "multi_tool_chain_02",
+        "multi_tool_chain_03",
+        "multi_tool_chain_04",
+        "multi_tool_chain_05",
+        "multi_tool_chain_06",
+        "multi_tool_chain_07",
+        "multi_tool_chain_08",
+        "multi_tool_chain_09",
+        "multi_tool_chain_10",
+        "multi_tool_chain_11",
+        "multi_tool_chain_12"
+      ]
+    },
+    {
+      "name": "long_history_reasoning",
+      "description": "多轮叠加约束，考察 Context Slots",
+      "tasks": [
+        "long_history_reasoning_01",
+        "long_history_reasoning_02",
+        "long_history_reasoning_03",
+        "long_history_reasoning_04",
+        "long_history_reasoning_05",
+        "long_history_reasoning_06",
+        "long_history_reasoning_07",
+        "long_history_reasoning_08",
+        "long_history_reasoning_09",
+        "long_history_reasoning_10",
+        "long_history_reasoning_11",
+        "long_history_reasoning_12"
+      ]
+    },
+    {
+      "name": "adversarial_security",
+      "description": "注入/恶意诱导，考察 Sanitizer + Policy",
+      "tasks": [
+        "adversarial_security_01",
+        "adversarial_security_02",
+        "adversarial_security_03",
+        "adversarial_security_04",
+        "adversarial_security_05",
+        "adversarial_security_06",
+        "adversarial_security_07",
+        "adversarial_security_08",
+        "adversarial_security_09",
+        "adversarial_security_10",
+        "adversarial_security_11",
+        "adversarial_security_12"
+      ]
+    }
+  ]
+}

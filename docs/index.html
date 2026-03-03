@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Token Governor Metrics Portal</title>
+  <style>
+    body {
+      margin: 0;
+      background: #f8faf9;
+      color: #203325;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      padding: 40px 16px;
+    }
+    .wrap {
+      max-width: 920px;
+      margin: 0 auto;
+      background: white;
+      border: 1px solid #d6e3d7;
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 16px 50px rgba(20, 48, 26, 0.08);
+    }
+    h1 { margin-top: 0; }
+    ul { line-height: 1.8; }
+    a { color: #1d6f42; font-weight: 600; }
+    .badges img { margin-right: 10px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Token Governor Metrics Portal</h1>
+    <p>Automated benchmark observability page for trends, badges, and KPI summary.</p>
+    <ul>
+      <li><a href="trends/trends.html">Benchmark Trends Dashboard</a></li>
+      <li><a href="trends/kpi_summary.md">KPI Summary (markdown)</a></li>
+    </ul>
+    <div class="badges">
+      <img src="badges/success_rate.svg" alt="success rate" />
+      <img src="badges/token_savings.svg" alt="token savings" />
+      <img src="badges/latency.svg" alt="latency" />
+      <img src="badges/fallback_rate.svg" alt="fallback" />
+    </div>
+  </div>
+</body>
+</html>

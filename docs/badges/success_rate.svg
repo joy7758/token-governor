@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="112" height="20" role="img" aria-label="success rate: n/a">
+  <rect rx="3" width="112" height="20" fill="#555"/>
+  <rect rx="3" x="66" width="46" height="20" fill="#9f9f9f"/>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">
+    <text x="33" y="14">success</text>
+    <text x="89" y="14">n/a</text>
+  </g>
+</svg>

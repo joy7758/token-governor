@@ -11,6 +11,13 @@ LLM cost optimization, token savings, inference cost, AI agents, context compres
   <img src="https://img.shields.io/github/stars/joy7758/token-governor" alt="Stars" />
 </div>
 
+<div align="center">
+  <img src="docs/badges/success_rate.svg" alt="Success Rate" />
+  <img src="docs/badges/token_savings.svg" alt="Token Savings" />
+  <img src="docs/badges/latency.svg" alt="Latency" />
+  <img src="docs/badges/fallback_rate.svg" alt="Fallback Rate" />
+</div>
+
 ---
 
 ## 🧠 一、简介 / Introduction
@@ -48,7 +55,11 @@ python main.py --mode baseline --limit 20 --out-file metrics/data/baseline.jsonl
 
 ### 🛡️ Run Governor / 策略控制
 ```bash
-python main.py --mode governor --drive-mode eco --limit 20 --out-file metrics/data/governor.jsonl
+python main.py --mode governor --drive-mode eco \
+  --policy-file policy.yaml \
+  --tasks-file metrics/benchmarks/benchmark_v02_60_tasks.json \
+  --limit 20 \
+  --out-file metrics/data/governor.jsonl
 ```
 
 ### 📈 Generate Report / 生成对比分析
@@ -136,10 +147,86 @@ python main.py --mode governor --drive-mode rocket --enable-agentic-plan-cache -
 | `--max-fallback` | Governor 最大 fallback 次数 | `2` |
 | `--out-file` | 结果 JSONL 输出路径 | `None` |
 | `--model-profile` | 模型画像 JSON 路径 | `None` |
+| `--policy-file` | Policy YAML 路径（v0.2 gate/fallback/risk 配置） | `policy.yaml` |
+| `--tasks-file` | 任务集文件（`.json` / `.jsonl`） | `None`（使用内置任务） |
 
 ---
 
-## 🧠 七、典型场景 / Use Cases
+## 🧪 七、Benchmark v0.2
+
+- 任务集（60 条）：`metrics/benchmarks/benchmark_v02_60_tasks.json`
+- JSONL 版本：`metrics/benchmarks/benchmark_v02_60_tasks.jsonl`
+- 类别分布：5 类 × 12 条（单轮无工具 / 单工具敏感 / 多工具串联 / 长历史 / 对抗安全）
+
+运行示例：
+
+```bash
+python main.py --mode governor \
+  --policy-file policy.yaml \
+  --tasks-file metrics/benchmarks/benchmark_v02_60_tasks.json \
+  --out-file metrics/data/governor-v02.jsonl
+```
+
+自动判定示例：
+
+```bash
+python -m metrics.validator \
+  --tasks metrics/benchmarks/benchmark_v02_60_tasks.json \
+  --records metrics/data/governor-v02.jsonl \
+  --out metrics/reports/validator-v02.json
+```
+
+---
+
+## 📊 八、Dashboard
+
+生成可视化 Dashboard（帕累托、分类柱状、失败分布、压缩率关系）：
+
+```bash
+python -m metrics.dashboard.benchmark_dashboard \
+  --governor metrics/data/governor-v02.jsonl \
+  --baseline metrics/data/baseline-v02.jsonl \
+  --outdir metrics/reports/v02-dashboard
+```
+
+输出目录默认包含：
+- `pareto_scatter.html/png`
+- `category_bars.html/png`
+- `failure_pie.html/png`
+- `compression_success.html/png`
+- `summary_panel.png`
+- `category_summary.csv`
+- `overall_summary.csv`
+- `dashboard_summary.json`
+
+---
+
+## 🔁 九、CI 自动化
+
+新增工作流：`.github/workflows/benchmark-v02-dashboard-auto.yml`
+
+- 触发：`push main` + `workflow_dispatch`
+- 自动执行：baseline benchmark → governor benchmark → validator → dashboard → comparison report → README metrics 更新 → 自动提交
+
+新增轻量定时工作流：`.github/workflows/benchmark-v02-daily-light.yml`
+
+- 触发：daily `cron` + `workflow_dispatch`
+- 默认只跑 `limit=20` 轻量任务
+- 自动执行 guardrail 检查（成功率跌幅 / token 增幅 / 延迟增幅阈值）
+- guardrail 失败时自动创建（同日去重）issue，并可 @维护者，最终标记 job failed
+- 自动生成 `docs/trends/*.json`、`docs/badges/*.svg`、`docs/trends/kpi_summary.md`
+- 可选通知脚本：`scripts/notify_slack.py`、`scripts/notify_dingtalk.py`、`scripts/notify_email.py`
+- 趋势页面发布工作流：`.github/workflows/publish-trends-pages.yml`
+
+本地一键执行同等流程：
+
+```bash
+bash scripts/run-benchmark-v02-dashboard.sh
+```
+
+---
+
+## 🧠 十、典型场景 / Use Cases
 
 **中文：**
 - 企业级 LLM 推理成本优化
@@ -155,7 +242,7 @@ python main.py --mode governor --drive-mode rocket --enable-agentic-plan-cache -
 
 ---
 
-## ❓ 八、常见问题 / FAQ
+## ❓ 十一、常见问题 / FAQ
 
 **Q1: 什么是 Drive Mode？**  
 A: Drive Mode 用于在成本与质量之间做权衡，例如 Eco 模式优先节省 Token，而 Rocket 模式优先输出质量。
@@ -173,17 +260,17 @@ A: 不会。Auto 会根据任务特征与预算约束动态选档，可能停在
 A: 不一定。Rocket 优先保证输出能力，不承诺 Token 成本最低；请以实测对比区块为准。
 
 **Q6: 如何一键复现实验并更新 README？**  
-A: 本地可执行 `bash scripts/run-all-and-update.sh`；远端可运行 GitHub Actions 工作流 `Benchmark And Update README Metrics`。
+A: 多模式对比可执行 `bash scripts/run-all-and-update.sh`；v0.2 benchmark + dashboard 可执行 `bash scripts/run-benchmark-v02-dashboard.sh`；远端可运行 `Benchmark v0.2 Dashboard Auto` 或 `Benchmark And Update README Metrics`。
 
 ---
 
-## 👥 九、贡献指南 / Contributing
+## 👥 十二、贡献指南 / Contributing
 
 欢迎提交 Issue 和 Pull Request，细则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ---
 
-## 📜 十、许可证 / License
+## 📜 十三、许可证 / License
 
 本项目使用 **TianJiang Non-Commercial License v1.0**：
 - 非商用可免费使用
@@ -192,7 +279,7 @@ A: 本地可执行 `bash scripts/run-all-and-update.sh`；远端可运行 GitHub
 
 ---
 
-## 📚 十一、参考 / References
+## 📚 十四、参考 / References
 
 - [Best-README-Template](https://github.com/othneildrew/Best-README-Template)
 - [Awesome README Collection](https://github.com/matiassingers/awesome-readme)

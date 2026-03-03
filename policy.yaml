@@ -1,0 +1,113 @@
+# policy.yaml - Token Governor v0.2
+version: 0.2
+
+# 1) Capability Gate
+gate:
+  thresholds:
+    no_agent_threshold: 0.60
+    safe_agent_threshold: 0.75
+    privileged_threshold: 0.90
+  uncertainty_band:
+    low: 0.75
+    high: 0.90
+  safe_mode:
+    allowed_tool_types: ["read", "search", "extract"]
+    disallowed_tool_types: ["write", "modify", "delete", "send_email"]
+    escalate_to_manual_on_disallowed: true
+
+# 2) Tool Selection
+tool_selection:
+  topK: 3
+  max_dependency_depth: 2
+  cost_weight: 0.5
+  similarity_weight: 0.4
+  risk_weight: 0.1
+
+# 3) Dependency Closure
+dependency:
+  required_fields:
+    - id
+    - capability_type
+    - provides
+    - requires
+    - io_schema
+  closure_expansion: true
+  closure_max_size: 6
+
+# 4) Context Compression (Slots)
+context_slots:
+  preserve_ordered_slots:
+    - policy
+    - goal
+    - constraints
+    - variables
+    - tool_results
+    - plan
+  max_tokens_per_slot:
+    policy: 2048
+    goal: 1024
+    constraints: 1024
+    variables: 2048
+    tool_results: 4096
+    plan: 2048
+  summarization_model: "small_chat_model"
+
+# 5) Failure Taxonomy
+failure:
+  classification:
+    deterministic:
+      - name: param_error
+      - name: auth_error
+      - name: not_found
+      - name: schema_mismatch
+    probabilistic:
+      - name: reasoning_failure
+      - name: planning_error
+    policy:
+      - name: risk_violation
+      - name: unsafe_tool_request
+
+# 6) Fallback Strategy
+fallback:
+  max_fallback_steps: 3
+  max_extra_tokens: 1500
+  max_toolset_growth: 3
+  hard_budget_limits:
+    max_total_tokens: 12000
+    max_model_promotions: 2
+
+# 7) Budget & Circuit Breakers
+budget:
+  token:
+    baseline_limit: 4000
+    governor_limit: 3000
+  latency:
+    max_total_ms: 15000
+  success_rate:
+    min_acceptable: 0.85
+
+circuit_breaker:
+  consecutive_failures: 3
+  tool_error_threshold: 2
+
+# 8) Risk & Security
+risk:
+  allowed:
+    - "read"
+    - "search"
+    - "extract"
+  prohibited_combination:
+    - ["write", "delete"]
+    - ["email_send", "production_deploy"]
+
+security:
+  tool_output_sanitization: strict
+  forbid_instruction_like_words_in_tool_output: true
+
+# 9) Logging & Observability
+logging:
+  record_decision_bundle: true
+  record_fallback_path: true
+  record_tool_inputs: true
+  record_tool_outputs: true
+  anonymize_sensitive_fields: true
