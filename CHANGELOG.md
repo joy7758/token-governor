@@ -36,7 +36,7 @@ All notable changes to this project are documented in this file.
   - FAQ
   - command templates
   - drive-mode comparison table and APC research note for rocket mode
-  - auto-updatable metrics block markers (`METRICS_START/END`)
+  - auto-updatable metrics block markers (`REAL_METRICS_START/END`, `CHART_IMAGE_START/END`)
 - Automation scripts:
   - `scripts/run-all-and-update.sh`
   - `scripts/update_readme_metrics.py`
@@ -53,6 +53,8 @@ All notable changes to this project are documented in this file.
 - `GuardedAgent` now supports dynamic strategy application and richer runtime metadata.
 - `BaselineAgent` now supports `tools_override` to enable smart tool selection.
 - `metrics/tracker.py` now captures strategy and auto-strategy fields.
+- License changed from default open-source wording to `TianJiang Non-Commercial License v1.0`:
+  commercial use now requires paid licensing or cooperation authorization.
 
 ### Fixed
 
