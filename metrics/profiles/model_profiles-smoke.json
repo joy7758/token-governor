@@ -1,0 +1,32 @@
+{
+  "version": "0.1.0",
+  "generated_at_utc": "2026-03-03T13:53:33.800249+00:00",
+  "models": {
+    "unknown": {
+      "total_runs": 4.0,
+      "modes": {
+        "rocket": {
+          "count": 2.0,
+          "mean_token": 5481.5,
+          "mean_latency": 23.625641770498987,
+          "success_rate": 1.0
+        },
+        "auto": {
+          "count": 1.0,
+          "mean_token": 2059.0,
+          "mean_latency": 12.324268541997299,
+          "success_rate": 1.0
+        },
+        "eco": {
+          "count": 1.0,
+          "mean_token": 1887.0,
+          "mean_latency": 9.658606249999139,
+          "success_rate": 1.0
+        }
+      },
+      "best_cost_mode": "eco",
+      "best_quality_mode": "eco",
+      "best_balance_mode": "eco"
+    }
+  }
+}

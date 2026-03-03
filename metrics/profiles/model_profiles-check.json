@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0.0",
+  "version": "0.2.0",
+  "generated_at_utc": "2026-03-03T14:10:19.006634+00:00",
+  "models": {
+    "unknown": {
+      "model_name": "unknown",
+      "version": null,
+      "tag": [
+        "cost_optimized",
+        "high_quality_capable",
+        "long_context_active",
+        "stable"
+      ],
+      "total_runs": 4,
+      "avg_tokens": 3727.25,
+      "avg_prompt_tokens": 3046.75,
+      "avg_response_tokens": 680.5,
+      "median_tokens": 2816.0,
+      "p95_tokens": 6817.449999999999,
+      "success_rate": 1.0,
+      "avg_latency_ms": 17308.539583248603,
+      "quality_score": null,
+      "semantic_cache_hit_rate": 0.0,
+      "plan_cache_hit_rate": 0.0,
+      "compression_rate": 1.0,
+      "strategy_performance": {
+        "rocket": {
+          "count": 2,
+          "avg_tokens": 5481.5,
+          "avg_prompt_tokens": 4733.0,
+          "avg_response_tokens": 748.5,
+          "median_tokens": 5481.5,
+          "p95_tokens": 7199.15,
+          "success_rate": 1.0,
+          "avg_latency_ms": 23625.641770498987,
+          "quality_score": null,
+          "semantic_cache_hit_rate": 0.0,
+          "plan_cache_hit_rate": 0.0,
+          "compression_rate": 1.0
+        },
+        "auto": {
+          "count": 1,
+          "avg_tokens": 2059.0,
+          "avg_prompt_tokens": 1274.0,
+          "avg_response_tokens": 785.0,
+          "median_tokens": 2059.0,
+          "p95_tokens": 2059.0,
+          "success_rate": 1.0,
+          "avg_latency_ms": 12324.268541997299,
+          "quality_score": null,
+          "semantic_cache_hit_rate": 0.0,
+          "plan_cache_hit_rate": 0.0,
+          "compression_rate": 1.0
+        },
+        "eco": {
+          "count": 1,
+          "avg_tokens": 1887.0,
+          "avg_prompt_tokens": 1447.0,
+          "avg_response_tokens": 440.0,
+          "median_tokens": 1887.0,
+          "p95_tokens": 1887.0,
+          "success_rate": 1.0,
+          "avg_latency_ms": 9658.606249999139,
+          "quality_score": null,
+          "semantic_cache_hit_rate": 0.0,
+          "plan_cache_hit_rate": 0.0,
+          "compression_rate": 1.0
+        }
+      },
+      "last_updated": "2026-03-03T14:10:19.006634+00:00",
+      "entries_sampled": 4,
+      "modes": {
+        "rocket": {
+          "count": 2.0,
+          "mean_token": 5481.5,
+          "mean_latency": 23.625641770498987,
+          "success_rate": 1.0
+        },
+        "auto": {
+          "count": 1.0,
+          "mean_token": 2059.0,
+          "mean_latency": 12.324268541997299,
+          "success_rate": 1.0
+        },
+        "eco": {
+          "count": 1.0,
+          "mean_token": 1887.0,
+          "mean_latency": 9.658606249999139,
+          "success_rate": 1.0
+        }
+      },
+      "best_cost_mode": "eco",
+      "best_quality_mode": "eco",
+      "best_balance_mode": "eco"
+    }
+  }
+}

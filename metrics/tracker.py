@@ -97,6 +97,50 @@ def record_result(
         row["governor_total_tokens"] = result["governor_total_tokens"]
     if "fallback_count" in result:
         row["fallback_count"] = result["fallback_count"]
+    if "strategy" in result:
+        row["strategy"] = result["strategy"]
+    if "selected_tools" in result:
+        row["selected_tools"] = result["selected_tools"]
+    if "model" in result:
+        row["model"] = result["model"]
+    if "strategies_applied" in result:
+        row["strategies_applied"] = result["strategies_applied"]
+    if "cache_hits" in result:
+        row["cache_hits"] = result["cache_hits"]
+    if "from_cache" in result:
+        row["from_cache"] = bool(result["from_cache"])
+    if "from_plan_cache" in result:
+        row["from_plan_cache"] = bool(result["from_plan_cache"])
+    if "agentic_plan_cache" in result:
+        row["agentic_plan_cache"] = bool(result["agentic_plan_cache"])
+    if "agentic_plan_key" in result:
+        row["agentic_plan_key"] = result["agentic_plan_key"]
+    if "plan_cache_similarity" in result:
+        row["plan_cache_similarity"] = float(result["plan_cache_similarity"] or 0)
+    if "cached_original_total_tokens" in result:
+        row["cached_original_total_tokens"] = int(
+            result["cached_original_total_tokens"] or 0
+        )
+    if "strategy_note" in result:
+        row["strategy_note"] = result["strategy_note"]
+    if "auto_strategy_reasons" in result:
+        row["auto_strategy_reasons"] = result["auto_strategy_reasons"]
+    if "auto_task_features" in result:
+        row["auto_task_features"] = result["auto_task_features"]
+    if "auto_selected_strategy" in result:
+        row["auto_selected_strategy"] = result["auto_selected_strategy"]
+    if "drive_mode" in result:
+        row["drive_mode"] = result["drive_mode"]
+    if "drive_mode_goal" in result:
+        row["drive_mode_goal"] = result["drive_mode_goal"]
+    if "drive_mode_description" in result:
+        row["drive_mode_description"] = result["drive_mode_description"]
+    if "model_profile_hint_mode" in result:
+        row["model_profile_hint_mode"] = result["model_profile_hint_mode"]
+    if "model_profile_hint_reason" in result:
+        row["model_profile_hint_reason"] = result["model_profile_hint_reason"]
+    if "task_features" in result:
+        row["task_features"] = result["task_features"]
 
     with records_path.open("a", encoding="utf-8") as file:
         file.write(json.dumps(row, ensure_ascii=False) + "\n")

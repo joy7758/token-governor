@@ -25,16 +25,13 @@ class BaselineAgent:
 
         self.model = self._resolve_model_name(model_name)
         self._validate_provider_key(self.model)
-        self.tools = self._build_tools()
-        self.agent = create_agent(
-            model=self.model,
-            tools=self.tools,
-            system_prompt=(
-                "You are a helpful assistant. Use tools when needed and provide"
-                " concise, accurate final answers."
-            ),
-            debug=verbose,
+        self.verbose = verbose
+        self.system_prompt = (
+            "You are a helpful assistant. Use tools when needed and provide"
+            " concise, accurate final answers."
         )
+        self.tools = self._build_tools()
+        self.agent = self._build_agent(self.tools)
 
     @staticmethod
     def _resolve_model_name(model_name: str) -> str:
@@ -92,6 +89,14 @@ class BaselineAgent:
         )
         return [web_search]
 
+    def _build_agent(self, tools: list[Any]) -> Any:
+        return create_agent(
+            model=self.model,
+            tools=tools,
+            system_prompt=self.system_prompt,
+            debug=self.verbose,
+        )
+
     @staticmethod
     def _extract_text(content: Any) -> str:
         if isinstance(content, str):
@@ -140,12 +145,21 @@ class BaselineAgent:
             "total_tokens": total_tokens,
         }
 
-    def run_task(self, prompt: str, task_id: str | None = None) -> dict[str, Any]:
+    def run_task(
+        self,
+        prompt: str,
+        task_id: str | None = None,
+        tools_override: list[Any] | None = None,
+    ) -> dict[str, Any]:
         start = time.perf_counter()
         run_id = task_id or str(uuid.uuid4())
 
         try:
-            output = self.agent.invoke(
+            runner = self.agent
+            if tools_override is not None:
+                runner = self._build_agent(tools_override)
+
+            output = runner.invoke(
                 {"messages": [{"role": "user", "content": prompt}]}
             )
             messages = output.get("messages", [])
@@ -163,6 +177,7 @@ class BaselineAgent:
             return {
                 "task_id": run_id,
                 "mode": "baseline",
+                "model": self.model,
                 "prompt": prompt,
                 "answer": final_answer,
                 "input_tokens": usage["input_tokens"],
@@ -177,6 +192,7 @@ class BaselineAgent:
             return {
                 "task_id": run_id,
                 "mode": "baseline",
+                "model": self.model,
                 "prompt": prompt,
                 "answer": "",
                 "input_tokens": 0,

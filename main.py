@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from baseline.agent import BaselineAgent
+from governor.auto_strategy import apply_auto_strategy
 from governor.agent import BudgetExceeded, FallbackExceeded, GuardedAgent
+from governor.model_profile import load_model_profiles, recommend_drive_mode_from_profile
+from governor.strategy import DRIVE_MODE_NAMES, STRATEGY_NAMES, resolve_drive_mode, resolve_strategy
 from metrics.tracker import MetricsTracker
 
 
@@ -60,6 +64,164 @@ def _write_out_file(records: list[dict[str, object]], out_file: str | None) -> N
     print(f"out_file: {out_path}")
 
 
+def _resolve_bool_override(
+    enabled: bool,
+    disabled: bool,
+    *,
+    flag_name: str,
+) -> bool | None:
+    if enabled and disabled:
+        raise ValueError(f"Cannot enable and disable {flag_name} at the same time.")
+    if enabled:
+        return True
+    if disabled:
+        return False
+    return None
+
+
+def build_strategy_overrides(args: argparse.Namespace) -> dict[str, object]:
+    return {
+        "enable_context_compression": _resolve_bool_override(
+            args.enable_context_compression,
+            args.disable_context_compression,
+            flag_name="context-compression",
+        ),
+        "enable_smart_tool": _resolve_bool_override(
+            args.enable_smart_tool,
+            args.disable_smart_tool,
+            flag_name="smart-tool",
+        ),
+        "enable_rag": _resolve_bool_override(
+            args.enable_rag,
+            args.disable_rag,
+            flag_name="rag",
+        ),
+        "enable_context_pruning": _resolve_bool_override(
+            args.enable_context_pruning,
+            args.disable_context_pruning,
+            flag_name="context-pruning",
+        ),
+        "enable_semantic_cache": _resolve_bool_override(
+            args.enable_semantic_cache,
+            args.disable_semantic_cache,
+            flag_name="semantic-cache",
+        ),
+        "enable_agentic_plan_cache": _resolve_bool_override(
+            args.enable_agentic_plan_cache,
+            args.disable_agentic_plan_cache,
+            flag_name="agentic-plan-cache",
+        ),
+        "enable_model_routing": _resolve_bool_override(
+            args.enable_model_routing,
+            args.disable_model_routing,
+            flag_name="model-routing",
+        ),
+        "tool_top_k": args.tool_top_k,
+        "history_summary_chars": args.history_summary_chars,
+    }
+
+
+def detect_external_requirements(prompt: str) -> bool:
+    keywords = (
+        "find",
+        "latest",
+        "source",
+        "search",
+        "article",
+        "benchmark",
+        "recent",
+        "public",
+        "according to",
+    )
+    lower = prompt.lower()
+    return any(keyword in lower for keyword in keywords)
+
+
+def estimate_history_tokens(records: list[dict[str, object]]) -> int:
+    if not records:
+        return 0
+    return int(sum(int(row.get("total_tokens", 0) or 0) for row in records[-3:]))
+
+
+def _tokenize_for_similarity(text: str) -> set[str]:
+    stop_words = {
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "to",
+        "of",
+        "in",
+        "on",
+        "for",
+        "with",
+        "about",
+        "by",
+        "from",
+        "is",
+        "are",
+        "be",
+        "this",
+        "that",
+        "how",
+        "what",
+        "when",
+        "where",
+        "find",
+        "explain",
+        "summarize",
+        "compare",
+    }
+    cleaned = re.sub(r"https?://\S+", " ", text.lower())
+    cleaned = re.sub(r"[^0-9a-z\u4e00-\u9fff\s]", " ", cleaned)
+    tokens = {token for token in cleaned.split() if len(token) > 1}
+    return {token for token in tokens if token not in stop_words}
+
+
+def semantic_similarity_score(prompt: str, previous_prompts: list[str]) -> float:
+    if not previous_prompts:
+        return 0.0
+    current = _tokenize_for_similarity(prompt)
+    if not current:
+        return 0.0
+
+    best = 0.0
+    for old_prompt in previous_prompts[-12:]:
+        old = _tokenize_for_similarity(old_prompt)
+        if not old:
+            continue
+        union = current | old
+        if not union:
+            continue
+        score = len(current & old) / len(union)
+        if score > best:
+            best = score
+    return round(best, 4)
+
+
+def build_task_context(
+    prompt: str,
+    records: list[dict[str, object]],
+    tool_count: int,
+) -> dict[str, object]:
+    previous_prompts = [
+        str(row.get("prompt", "") or "")
+        for row in records
+        if str(row.get("prompt", "") or "").strip()
+    ]
+    similarity = semantic_similarity_score(prompt, previous_prompts)
+    external_query = detect_external_requirements(prompt)
+    return {
+        "history_tokens": estimate_history_tokens(records),
+        "tool_calls": tool_count,
+        "external_query": external_query,
+        "external_data": external_query,
+        "semantic_similarity_score": similarity,
+        "context_length": len(prompt),
+    }
+
+
 def run_baseline(
     model_name: str,
     limit: int | None = None,
@@ -103,11 +265,19 @@ def run_governor(
     max_tokens: int = 12_000,
     max_fallback: int = 2,
     out_file: str | None = None,
+    strategy_config: dict[str, object] | None = None,
+    strategy_overrides: dict[str, object] | None = None,
+    auto_strategy: bool = False,
+    drive_mode: str | None = None,
+    model_profiles: dict[str, object] | None = None,
 ) -> int:
     load_dotenv()
 
     tasks = DEFAULT_TASKS if limit is None else DEFAULT_TASKS[:limit]
     tracker = MetricsTracker(output_dir="metrics/data")
+    effective_strategy = strategy_config or resolve_strategy("balanced")
+    overrides = strategy_overrides or {}
+    profiles = model_profiles or {}
 
     try:
         baseline_agent = BaselineAgent(model_name=model_name, verbose=False)
@@ -115,16 +285,94 @@ def run_governor(
             baseline_agent=baseline_agent,
             max_tokens=max_tokens,
             max_fallback=max_fallback,
+            opt_strategy="balanced",
         )
+        guarded_agent.apply_strategy(effective_strategy)
     except Exception as exc:  # noqa: BLE001
         print(f"[error] failed to initialize GuardedAgent: {exc}")
         return 1
 
+    last_strategy_snapshot = ""
+
     for idx, prompt in enumerate(tasks, start=1):
         task_id = f"task-{idx:03d}"
+        task_context = build_task_context(
+            prompt=prompt,
+            records=tracker.records,
+            tool_count=len(getattr(baseline_agent, "tools", [])),
+        )
+
+        run_metadata: dict[str, object] = {"task_features": task_context}
+        if auto_strategy:
+            profile_hint_reason: str | None = None
+            profile_hint_mode: str | None = None
+            if drive_mode == "auto":
+                profile_hint_mode, profile_hint_reason = recommend_drive_mode_from_profile(
+                    profiles,
+                    str(getattr(baseline_agent, "model", "")),
+                    objective="balanced",
+                )
+                if profile_hint_mode:
+                    task_context["profile_drive_mode_hint"] = profile_hint_mode
+
+            effective_strategy, reasons = apply_auto_strategy(
+                task_context,
+                overrides=overrides,
+                drive_mode=drive_mode,
+            )
+            run_metadata.update(
+                {
+                    "auto_strategy_reasons": reasons,
+                    "auto_task_features": effective_strategy.get("auto_task_features", {}),
+                    "auto_selected_strategy": effective_strategy.get("opt_strategy"),
+                    "drive_mode": effective_strategy.get("drive_mode"),
+                    "drive_mode_goal": effective_strategy.get("drive_mode_goal"),
+                    "drive_mode_description": effective_strategy.get("drive_mode_description"),
+                    "model_profile_hint_mode": profile_hint_mode,
+                    "model_profile_hint_reason": profile_hint_reason,
+                }
+            )
+            guarded_agent.apply_strategy(effective_strategy)
+        elif drive_mode:
+            run_metadata.update(
+                {
+                    "drive_mode": effective_strategy.get("drive_mode"),
+                    "drive_mode_goal": effective_strategy.get("drive_mode_goal"),
+                    "drive_mode_description": effective_strategy.get("drive_mode_description"),
+                }
+            )
+
+        strategy_snapshot = json.dumps(
+            {
+                "opt_strategy": guarded_agent.opt_strategy,
+                "drive_mode": effective_strategy.get("drive_mode"),
+                "enable_context_compression": guarded_agent.enable_context_compression,
+                "enable_smart_tool": guarded_agent.enable_smart_tool,
+                "enable_rag": guarded_agent.enable_rag,
+                "enable_context_pruning": guarded_agent.enable_context_pruning,
+                "enable_semantic_cache": guarded_agent.enable_semantic_cache,
+                "enable_agentic_plan_cache": guarded_agent.enable_agentic_plan_cache,
+                "enable_model_routing": guarded_agent.enable_model_routing,
+                "tool_top_k": guarded_agent.tool_top_k,
+                "history_summary_chars": guarded_agent.history_summary_chars,
+                "auto_mode": auto_strategy,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        if strategy_snapshot != last_strategy_snapshot:
+            print("[strategy] " + strategy_snapshot)
+            if run_metadata.get("auto_strategy_reasons"):
+                print("[strategy_reasons] " + json.dumps(run_metadata, ensure_ascii=False))
+            last_strategy_snapshot = strategy_snapshot
+
         print(f"[run] {task_id}: {prompt}")
         try:
-            result = guarded_agent.run(prompt=prompt, task_id=task_id)
+            result = guarded_agent.run(
+                prompt=prompt,
+                task_id=task_id,
+                run_metadata=run_metadata,
+            )
         except (BudgetExceeded, FallbackExceeded) as exc:
             result = {
                 "task_id": task_id,
@@ -168,8 +416,37 @@ def parse_args() -> argparse.Namespace:
         "--model",
         default="auto",
         help=(
-            "Model name, e.g. auto, gpt-4o-mini, gemini-2.0-flash, "
-            "openai:gpt-4o-mini, google_genai:gemini-2.0-flash"
+            "Model name, e.g. auto, gpt-4o-mini, gemini-2.5-flash, "
+            "openai:gpt-4o-mini, google_genai:gemini-2.5-flash"
+        ),
+    )
+    parser.add_argument(
+        "--opt-strategy",
+        choices=list(STRATEGY_NAMES),
+        default="balanced",
+        help="Governor-only manual strategy profile: light/balanced/knowledge/enterprise.",
+    )
+    parser.add_argument(
+        "--auto-strategy",
+        action="store_true",
+        help="Governor-only: enable AI-driven automatic strategy recommendation.",
+    )
+    parser.add_argument(
+        "--drive-mode",
+        choices=list(DRIVE_MODE_NAMES),
+        default=None,
+        help=(
+            "Governor-only driving preset: auto/eco/comfort/sport/rocket. "
+            "`auto` implies dynamic recommendation path."
+        ),
+    )
+    parser.add_argument(
+        "--model-profile",
+        type=str,
+        default=None,
+        help=(
+            "Optional model profile JSON path generated by "
+            "scripts/build_model_profiles.py"
         ),
     )
     parser.add_argument(
@@ -196,12 +473,123 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional JSONL output path for this run (stable filename).",
     )
+    parser.add_argument(
+        "--enable-context-compression",
+        action="store_true",
+        help="Override: enable context compression.",
+    )
+    parser.add_argument(
+        "--disable-context-compression",
+        action="store_true",
+        help="Override: disable context compression.",
+    )
+    parser.add_argument(
+        "--enable-smart-tool",
+        action="store_true",
+        help="Override: enable smart tool selector.",
+    )
+    parser.add_argument(
+        "--disable-smart-tool",
+        action="store_true",
+        help="Override: disable smart tool selector.",
+    )
+    parser.add_argument(
+        "--enable-rag",
+        action="store_true",
+        help="Override: enable RAG stage.",
+    )
+    parser.add_argument(
+        "--disable-rag",
+        action="store_true",
+        help="Override: disable RAG stage.",
+    )
+    parser.add_argument(
+        "--enable-context-pruning",
+        action="store_true",
+        help="Override: enable context pruning stage.",
+    )
+    parser.add_argument(
+        "--disable-context-pruning",
+        action="store_true",
+        help="Override: disable context pruning stage.",
+    )
+    parser.add_argument(
+        "--enable-semantic-cache",
+        action="store_true",
+        help="Override: enable semantic cache.",
+    )
+    parser.add_argument(
+        "--disable-semantic-cache",
+        action="store_true",
+        help="Override: disable semantic cache.",
+    )
+    parser.add_argument(
+        "--enable-model-routing",
+        action="store_true",
+        help="Override: enable model routing.",
+    )
+    parser.add_argument(
+        "--disable-model-routing",
+        action="store_true",
+        help="Override: disable model routing.",
+    )
+    parser.add_argument(
+        "--enable-agentic-plan-cache",
+        action="store_true",
+        help="Override: enable agentic plan cache.",
+    )
+    parser.add_argument(
+        "--disable-agentic-plan-cache",
+        action="store_true",
+        help="Override: disable agentic plan cache.",
+    )
+    parser.add_argument(
+        "--tool-top-k",
+        type=int,
+        default=None,
+        help="Override: smart tool selector top-k.",
+    )
+    parser.add_argument(
+        "--history-summary-chars",
+        type=int,
+        default=None,
+        help="Override: max chars for retry history summary.",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
     if args.mode == "governor":
+        auto_mode_enabled = args.auto_strategy or args.drive_mode == "auto"
+        strategy_overrides = build_strategy_overrides(args)
+        strategy_config: dict[str, object] | None = None
+        model_profiles = load_model_profiles(args.model_profile)
+        if auto_mode_enabled and args.opt_strategy not in {"balanced", "auto"}:
+            print(
+                "[info] auto strategy path is enabled; "
+                f"--opt-strategy={args.opt_strategy} is ignored."
+            )
+        if args.drive_mode == "auto" and not args.auto_strategy:
+            print(
+                "[info] --drive-mode=auto implies dynamic auto strategy mode."
+            )
+        if auto_mode_enabled and args.drive_mode:
+            print(
+                "[info] auto strategy path is enabled with "
+                f"--drive-mode={args.drive_mode}; drive mode acts as intent override."
+            )
+        if not auto_mode_enabled:
+            if args.drive_mode:
+                strategy_config = resolve_drive_mode(
+                    args.drive_mode,
+                    overrides=strategy_overrides,
+                )
+            else:
+                strategy_config = resolve_strategy(
+                    args.opt_strategy,
+                    overrides=strategy_overrides,
+                )
         raise SystemExit(
             run_governor(
                 model_name=args.model,
@@ -209,6 +597,11 @@ if __name__ == "__main__":
                 max_tokens=args.max_tokens,
                 max_fallback=args.max_fallback,
                 out_file=args.out_file,
+                strategy_config=strategy_config,
+                strategy_overrides=strategy_overrides,
+                auto_strategy=auto_mode_enabled,
+                drive_mode=args.drive_mode,
+                model_profiles=model_profiles,
             )
         )
     raise SystemExit(
