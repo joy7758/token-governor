@@ -71,7 +71,30 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Check benchmark credentials
+        id: benchmark_creds
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [[ -n "${OPENAI_API_KEY}" || -n "${GOOGLE_API_KEY}" || -n "${GEMINI_API_KEY}" ]]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+            echo "Benchmark API credentials detected."
+            exit 0
+          fi
+
+          echo "available=false" >> "${GITHUB_OUTPUT}"
+          {
+            echo "## Benchmark skipped"
+            echo ""
+            echo "No benchmark API secret is configured for this repository."
+            echo "Expected one of: \`OPENAI_API_KEY\`, \`GOOGLE_API_KEY\`, or \`GEMINI_API_KEY\`."
+          } >> "${GITHUB_STEP_SUMMARY}"
+          echo "Skipping benchmark run because no API secrets are configured."
+
       - name: Run benchmark + validator + dashboard + report + README update
+        if: steps.benchmark_creds.outputs.available == 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
@@ -98,6 +121,7 @@ jobs:
           bash scripts/run-benchmark-v02-dashboard.sh
 
       - name: Commit and push generated artifacts
+        if: steps.benchmark_creds.outputs.available == 'true'
         env:
           OUTDIR: ${{ inputs.outdir || 'metrics/reports/v02-dashboard' }}
         run: |

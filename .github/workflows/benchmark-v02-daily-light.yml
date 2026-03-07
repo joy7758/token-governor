@@ -74,7 +74,30 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Check benchmark credentials
+        id: benchmark_creds
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [[ -n "${OPENAI_API_KEY}" || -n "${GOOGLE_API_KEY}" || -n "${GEMINI_API_KEY}" ]]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+            echo "Benchmark API credentials detected."
+            exit 0
+          fi
+
+          echo "available=false" >> "${GITHUB_OUTPUT}"
+          {
+            echo "## Benchmark skipped"
+            echo ""
+            echo "No benchmark API secret is configured for this repository."
+            echo "Expected one of: \`OPENAI_API_KEY\`, \`GOOGLE_API_KEY\`, or \`GEMINI_API_KEY\`."
+          } >> "${GITHUB_STEP_SUMMARY}"
+          echo "Skipping benchmark run because no API secrets are configured."
+
       - name: Run light benchmark + validator + dashboard + report
+        if: steps.benchmark_creds.outputs.available == 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
@@ -100,6 +123,7 @@ jobs:
 
       - name: Guardrail check
         id: guardrail
+        if: steps.benchmark_creds.outputs.available == 'true'
         continue-on-error: true
         env:
           OUTDIR: ${{ inputs.outdir || 'metrics/reports/daily-light-dashboard' }}
@@ -118,7 +142,7 @@ jobs:
             --out-markdown "${OUTDIR}/guardrail.md"
 
       - name: Upload light benchmark artifacts
-        if: always()
+        if: always() && steps.benchmark_creds.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: daily-light-benchmark-artifacts
@@ -132,7 +156,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Create issue on guardrail failure
-        if: steps.guardrail.outcome == 'failure'
+        if: steps.benchmark_creds.outputs.available == 'true' && steps.guardrail.outcome == 'failure'
         uses: actions/github-script@v7
         env:
           OUTDIR: ${{ inputs.outdir || 'metrics/reports/daily-light-dashboard' }}
@@ -199,7 +223,7 @@ jobs:
             });
 
       - name: Notify channels on guardrail failure
-        if: steps.guardrail.outcome == 'failure'
+        if: steps.benchmark_creds.outputs.available == 'true' && steps.guardrail.outcome == 'failure'
         continue-on-error: true
         env:
           OUTDIR: ${{ inputs.outdir || 'metrics/reports/daily-light-dashboard' }}
@@ -218,7 +242,7 @@ jobs:
           python scripts/notify_email.py --subject "${TITLE}" --body-file "${BODY_FILE}"
 
       - name: Fail job when guardrail fails
-        if: steps.guardrail.outcome == 'failure'
+        if: steps.benchmark_creds.outputs.available == 'true' && steps.guardrail.outcome == 'failure'
         run: |
           echo "Guardrail check failed. See issue/artifacts for details."
           exit 1

@@ -70,22 +70,42 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run full benchmark
-        if: ${{ github.event_name == 'schedule' || inputs.run_benchmark }}
+      - name: Check benchmark credentials
+        id: benchmark_creds
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [[ -n "${OPENAI_API_KEY}" || -n "${GOOGLE_API_KEY}" || -n "${GEMINI_API_KEY}" ]]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+            echo "Benchmark API credentials detected."
+            exit 0
+          fi
+
+          echo "available=false" >> "${GITHUB_OUTPUT}"
+          {
+            echo "## Benchmark skipped"
+            echo ""
+            echo "No benchmark API secret is configured for this repository."
+            echo "Expected one of: \`OPENAI_API_KEY\`, \`GOOGLE_API_KEY\`, or \`GEMINI_API_KEY\`."
+          } >> "${GITHUB_STEP_SUMMARY}"
+          echo "Skipping benchmark run because no API secrets are configured."
+
+      - name: Run full benchmark
+        if: ${{ (github.event_name == 'schedule' || inputs.run_benchmark) && steps.benchmark_creds.outputs.available == 'true' }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           LIMIT: ${{ inputs.limit || '20' }}
           MODEL: ${{ inputs.model || 'auto' }}
           OUTDIR: ${{ inputs.outdir || 'metrics/reports/compare-real' }}
         run: |
-          if [[ -z "${OPENAI_API_KEY}" && -z "${GOOGLE_API_KEY}" ]]; then
-            echo "Missing API key secret: set OPENAI_API_KEY or GOOGLE_API_KEY."
-            exit 1
-          fi
           bash scripts/run-all-and-update.sh
 
       - name: Update README metrics
+        if: ${{ github.event_name != 'schedule' || steps.benchmark_creds.outputs.available == 'true' }}
         env:
           DISPATCH_RUN_BENCHMARK: ${{ inputs.run_benchmark && 'true' || 'false' }}
           OUTDIR: ${{ inputs.outdir || 'metrics/reports/compare-real' }}
@@ -118,6 +138,7 @@ jobs:
           python scripts/update_readme_metrics.py "${ARGS[@]}"
 
       - name: Commit and push changes
+        if: ${{ github.event_name != 'schedule' || steps.benchmark_creds.outputs.available == 'true' }}
         run: |
           if [[ -z "$(git status --porcelain)" ]]; then
             echo "No changes to commit."
